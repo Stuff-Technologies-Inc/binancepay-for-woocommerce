@@ -1,0 +1,16 @@
+{
+  "name": "binancepay/binancepay-for-woocommerce",
+  "type": "project",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "BinancePay\\WC\\": "src/"
+    }
+  },
+  "authors": [
+    {
+      "name": "Andreas Tasch",
+      "email": "andy.tasch@gmail.com"
+    }
+  ]
+}
