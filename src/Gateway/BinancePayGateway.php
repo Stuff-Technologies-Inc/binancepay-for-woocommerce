@@ -401,10 +401,10 @@ class BinancePayGateway extends \WC_Payment_Gateway {
 
 		// Compare stored certificate serial with the one sent in the header.
 		$certSerial = $this->get_option('certserial');
-		if ($certSerial !== $neededHeaders['binancepay-signature-sn']) {
+		if ($certSerial !== $neededHeaders['binancepay-certificate-sn']) {
 			Logger::debug('Error, the certificate serial in the header does not match the locally stored one:');
 			Logger::debug('local serial: ' . $certSerial);
-			Logger::debug('binancepay-signature-sn: ' . $neededHeaders['binancepay-signature-sn']);
+			Logger::debug('binancepay-certificate-sn: ' . $neededHeaders['binancepay-certificate-sn']);
 			Logger::debug('Likely Binance issued a new certificate in the meantime. Please go to payment gateway config of BinancePay and hit save agian, it will download the certificate.');
 			return false;
 		}
