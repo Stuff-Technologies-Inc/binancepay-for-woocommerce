@@ -4,15 +4,16 @@ declare( strict_types=1 );
 
 namespace BinancePay\WC\Gateway;
 
+use BinancePay\WC\Admin\Notice;
+use BinancePay\WC\Client\BinanceCertificate;
 use BinancePay\WC\Client\BinanceOrder;
 use BinancePay\WC\Helper\BinanceApiHelper;
-use BinancePay\WC\Helper\GreenfieldApiWebhook;
 use BinancePay\WC\Helper\Logger;
-use BinancePay\WC\Helper\OrderStates;
 use BinancePay\WC\Helper\PreciseNumber;
 
 class BinancePayGateway extends \WC_Payment_Gateway {
-	protected $apiClient;
+
+	protected BinanceApiHelper $apiHelper;
 
 	public function __construct() {
 		// General gateway setup.
@@ -36,6 +37,8 @@ class BinancePayGateway extends \WC_Payment_Gateway {
 		// Debugging & informational settings.
 		$this->debug_php_version    = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
 		$this->debug_plugin_version = BINANCEPAY_VERSION;
+
+		$this->apiHelper = new BinanceApiHelper();
 
 		// Actions.
 		add_action('woocommerce_api_binancepay', [$this, 'processWebhook']);
@@ -96,8 +99,36 @@ class BinancePayGateway extends \WC_Payment_Gateway {
 	public function process_admin_options() {
 		parent::process_admin_options();
 
-		// todo fetch signature and store it.
-		//$this->update_option('');
+		// Fetch Binance certificate public key for validating webhook callbacks.
+		$client = new BinanceCertificate(
+			$this->get_option('url', null),
+			$this->get_option('apikey', null),
+			$this->get_option('apisecret', null)
+		);
+
+		try {
+			$result = $client->getCertificate();
+
+			Logger::debug('Certificate result: ' . print_r($result, true));
+
+			$certSerial = $result['data'][0]['certSerial'] ?? null;
+			$certPublic = $result['data'][0]['certPublic'] ?? null;
+
+			if (!isset($certSerial, $certPublic)) {
+				Logger::debug('No certificate returned from Binance.');
+				Notice::addNotice('error', 'No certificate (for validating webhooks) returned from Binance.');
+			}
+
+			$this->update_option('certserial', $certSerial);
+			$this->update_option('certpublic', $certPublic);
+
+			Notice::addNotice('success', 'Successfully fetched certificate (for validating webhooks) from Binance.');
+
+		} catch (\Throwable $e) {
+			Logger::debug('Error fetching certificate from Binance. Error: ' . $e->getMessage());
+			Notice::addNotice('error', 'Error fetching certificate from Binance.');
+		}
+
 	}
 
 	/**
@@ -166,18 +197,19 @@ class BinancePayGateway extends \WC_Payment_Gateway {
 	 * Process webhooks from BinancePay.
 	 */
 	public function processWebhook() {
+
+		Logger::debug('Webhook endpoint called.');
+
 		// todo binancepay: this is currently not needed
 		if ($rawPostData = file_get_contents("php://input")) {
-			// Validate webhook request.
-			// Note: getallheaders() CamelCases all headers for PHP-FPM/Nginx but for others maybe not, so "BinancePay-Sig" may becomes "Btcpay-Sig".
-			$headers = getallheaders();
-			foreach ($headers as $key => $value) {
-				if (strtolower($key) === 'binancepay-sig') {
-					$signature = $value;
-				}
-			}
 
-			if (!isset($signature) || !$this->apiHelper->validWebhookRequest($signature, $rawPostData)) {
+			Logger::debug('Webhook data received: ' . print_r($rawPostData, true));
+
+			// Validate webhook request.
+			$headers = getallheaders();
+			Logger::debug('Webhook headers received: ' . print_r($headers, true));
+
+			if (!$this->validWebhookRequest($headers, $rawPostData)) {
 				Logger::debug('Failed to validate signature of webhook request.');
 				wp_die('Webhook request validation failed.');
 			}
@@ -185,26 +217,26 @@ class BinancePayGateway extends \WC_Payment_Gateway {
 			try {
 				$postData = json_decode($rawPostData, false, 512, JSON_THROW_ON_ERROR);
 
-				if (!isset($postData->invoiceId)) {
-					Logger::debug('No BinancePay invoiceId provided, aborting.');
-					wp_die('No BinancePay invoiceId provided, aborting.');
+				if (!isset($postData->bizId)) {
+					Logger::debug('No BinancePay bizId (prepayId) provided, aborting.');
+					wp_die('No BinancePay bizId (prepayId) provided, aborting.');
 				}
 
 				// Load the order by metadata field BinancePay_id
 				$orders = wc_get_orders([
-					'meta_key' => 'BinancePay_id',
-					'meta_value' => $postData->invoiceId
+					'meta_key' => 'BinancePay_prepayId',
+					'meta_value' => $postData->bizId
 				]);
 
 				// Abort if no orders found.
 				if (count($orders) === 0) {
-					Logger::debug('Could not load order by BinancePay invoiceId: ' . $postData->invoiceId);
-					wp_die('No order found for this invoiceId.', '', ['response' => 404]);
+					Logger::debug('Could not load order by BinancePay bizId: ' . $postData->bizId);
+					wp_die('No order found for this bizId.', '', ['response' => 404]);
 				}
 
 				// TODO: Handle multiple matching orders.
 				if (count($orders) > 1) {
-					Logger::debug('Found multiple orders for invoiceId: ' . $postData->invoiceId);
+					Logger::debug('Found multiple orders for bizId: ' . $postData->bizId);
 					Logger::debug(print_r($orders, true));
 					wp_die('Multiple orders found for this invoiceId, aborting.');
 				}
@@ -212,77 +244,42 @@ class BinancePayGateway extends \WC_Payment_Gateway {
 				$this->processOrderStatus($orders[0], $postData);
 
 			} catch (\Throwable $e) {
-				Logger::debug('Error decoding webook payload: ' . $e->getMessage());
+				Logger::debug('Error decoding webhook payload: ' . $e->getMessage());
 				Logger::debug($rawPostData);
 			}
 		}
 	}
 
 	protected function processOrderStatus(\WC_Order $order, \stdClass $webhookData) {
-		if (!in_array($webhookData->type, GreenfieldApiWebhook::WEBHOOK_EVENTS)) {
-			Logger::debug('Webhook event received but ignored: ' . $webhookData->type);
+
+		Logger::debug('Entering processOrderStatus()');
+
+		if ($webhookData->bizType !== 'PAY') {
+			Logger::debug('Webhook event received but ignored, wrong type: ' . $webhookData->bizType);
 			return;
 		}
 
-		Logger::debug('Updating order status with webhook event received for processing: ' . $webhookData->type);
-		// Get configured order states or fall back to defaults.
-		if (!$configuredOrderStates = get_option('binancepay_order_states')) {
-			$configuredOrderStates = (new OrderStates())->getDefaultOrderStateMappings();
-		}
+		switch ($webhookData->bizStatus) {
+			case 'PAY_CLOSED':
+				$order->update_status('failed');
+				$order->add_order_note(__('Payment failed/rejected.', 'binancepay-for-woocommerce'));
+				Logger::debug('Payment failed. Status: PAY_CLOSED');
+				break;
+			case 'PAY_SUCCESS':
+				// Update some Binance order meta data.
+				$paymentData = json_decode($webhookData->data, true);
+				$order->add_meta_data('BinancePay_trx_totalFee', $paymentData['totalFee']);
+				$order->add_meta_data('BinancePay_trx_commission', $paymentData['commission']);
+				$order->add_meta_data('BinancePay_trx_openUserId', $paymentData['openUserId']);
+				$order->add_meta_data('BinancePay_trx_transactionId', $paymentData['transactionId']);
+				$order->add_meta_data('BinancePay_trx_transactTime', $paymentData['transactTime']);
+				$order->add_meta_data('BinancePay_trx_paymentInfo', json_encode($paymentData['paymentInfo']));
+				$order->save();
 
-		switch ($webhookData->type) {
-			case 'InvoiceReceivedPayment':
-				if ($webhookData->afterExpiration) {
-					if ($order->get_status() === $configuredOrderStates[OrderStates::EXPIRED]) {
-						$this->updateWCOrderStatus($order, $configuredOrderStates[OrderStates::EXPIRED_PAID_PARTIAL]);
-						$order->add_order_note(__('Invoice payment received after invoice was already expired.', 'binancepay-for-woocommerce'));
-					}
-				} else {
-					// No need to change order status here, only leave a note.
-					$order->add_order_note(__('Invoice (partial) payment received. Waiting for full payment.', 'binancepay-for-woocommerce'));
-				}
-
-				// Store payment data (exchange rate, address).
-				$this->updateWCOrderPayments($order);
-
-				break;
-			case 'InvoiceProcessing': // The invoice is paid in full.
-				$this->updateWCOrderStatus($order, $configuredOrderStates[OrderStates::PROCESSING]);
-				if ($webhookData->overPaid) {
-					$order->add_order_note(__('Invoice payment received fully with overpayment, waiting for settlement.', 'binancepay-for-woocommerce'));
-				} else {
-					$order->add_order_note(__('Invoice payment received fully, waiting for settlement.', 'binancepay-for-woocommerce'));
-				}
-				break;
-			case 'InvoiceInvalid':
-				$this->updateWCOrderStatus($order, $configuredOrderStates[OrderStates::INVALID]);
-				if ($webhookData->manuallyMarked) {
-					$order->add_order_note(__('Invoice manually marked invalid.', 'binancepay-for-woocommerce'));
-				} else {
-					$order->add_order_note(__('Invoice became invalid.', 'binancepay-for-woocommerce'));
-				}
-				break;
-			case 'InvoiceExpired':
-				if ($webhookData->partiallyPaid) {
-					$this->updateWCOrderStatus($order, $configuredOrderStates[OrderStates::EXPIRED_PAID_PARTIAL]);
-					$order->add_order_note(__('Invoice expired but was paid partially, please check.', 'binancepay-for-woocommerce'));
-				} else {
-					$this->updateWCOrderStatus($order, $configuredOrderStates[OrderStates::EXPIRED]);
-					$order->add_order_note(__('Invoice expired.', 'binancepay-for-woocommerce'));
-				}
-				break;
-			case 'InvoiceSettled':
 				$order->payment_complete();
-				if ($webhookData->overPaid) {
-					$order->add_order_note(__('Invoice payment settled but was overpaid.', 'binancepay-for-woocommerce'));
-					$this->updateWCOrderStatus($order, $configuredOrderStates[OrderStates::SETTLED_PAID_OVER]);
-				} else {
-					$order->add_order_note(__('Invoice payment settled.', 'binancepay-for-woocommerce'));
-					$this->updateWCOrderStatus($order, $configuredOrderStates[OrderStates::SETTLED]);
-				}
+				$order->add_order_note(__('Payment successful. TransactionId: ' . $paymentData['transactionId'], 'binancepay-for-woocommerce'));
 
-				// Store payment data (exchange rate, address).
-				$this->updateWCOrderPayments($order);
+				Logger::debug('Payment successful. Status: PAY_SUCCESS');
 
 				break;
 		}
@@ -316,43 +313,6 @@ class BinancePayGateway extends \WC_Payment_Gateway {
 		}
 
 		return false;
-	}
-
-	/**
-	 * Update WC order status (if a valid mapping is set).
-	 */
-	public function updateWCOrderStatus(\WC_Order $order, string $status): void {
-		if ($status !== OrderStates::IGNORE) {
-			$order->update_status($status);
-		}
-	}
-
-	public function updateWCOrderPayments(\WC_Order $order): void {
-		// Load payment data from API.
-		try {
-			$client = new Invoice( $this->apiHelper->url, $this->apiHelper->apiKey );
-			$allPaymentData = $client->getPaymentMethods($this->apiHelper->storeId, $order->get_meta('BinancePay_id'));
-
-			foreach ($allPaymentData as $payment) {
-				// Only continue if the payment method has payments made.
-				if ((float) $payment->getTotalPaid() > 0.0) {
-					$paymentMethod = $payment->getPaymentMethod();
-					// Update order meta data.
-					update_post_meta( $order->get_id(), "BinancePay_{$paymentMethod}_destination", $payment->getDestination() ?? '' );
-					update_post_meta( $order->get_id(), "BinancePay_{$paymentMethod}_amount", $payment->getAmount() ?? '' );
-					update_post_meta( $order->get_id(), "BinancePay_{$paymentMethod}_paid", $payment->getTotalPaid() ?? '' );
-					update_post_meta( $order->get_id(), "BinancePay_{$paymentMethod}_networkFee", $payment->getNetworkFee() ?? '' );
-					update_post_meta( $order->get_id(), "BinancePay_{$paymentMethod}_rate", $payment->getRate() ?? '' );
-					if ((float) $payment->getRate() > 0.0) {
-						$formattedRate = number_format((float) $payment->getRate(), wc_get_price_decimals(), wc_get_price_decimal_separator(), wc_get_price_thousand_separator());
-						update_post_meta( $order->get_id(), "BinancePay_{$paymentMethod}_rateFormatted", $formattedRate );
-					}
-				}
-			}
-		} catch (\Throwable $e) {
-			Logger::debug( 'Error processing payment data for invoice: ' . $order->get_meta('BinancePay_id') . ' and order ID: ' . $order->get_id() );
-			Logger::debug($e->getMessage());
-		}
 	}
 
 	/**
@@ -409,18 +369,58 @@ class BinancePayGateway extends \WC_Payment_Gateway {
 	}
 
 	/**
-	 * Maps customer billing metadata.
+	 * Check webhook to be a valid request.
+	 *
+	 * @see https://developers.binance.com/docs/binance-pay/webhook-common
 	 */
-	protected function prepareCustomerMetadata( \WC_Order $order ): array {
-		return [
-			'buyerEmail'    => $order->get_billing_email(),
-			'buyerName'     => $order->get_formatted_billing_full_name(),
-			'buyerAddress1' => $order->get_billing_address_1(),
-			'buyerAddress2' => $order->get_billing_address_2(),
-			'buyerCity'     => $order->get_billing_city(),
-			'buyerState'    => $order->get_billing_state(),
-			'buyerZip'      => $order->get_billing_postcode(),
-			'buyerCountry'  => $order->get_billing_country()
+	public function validWebhookRequest(array $headers, string $requestData): bool {
+
+		Logger::debug('Entering validWebhookRequest().');
+
+		// Note: getallheaders() CamelCases all headers for PHP-FPM/Nginx but for others maybe not, so "BinancePay-Signature"
+		// may becomes "Binancepay-Signature".
+		$allowedHeaders = [
+			'binancepay-signature-sn',
+			'binancepay-nonce',
+			'binancepay-timestamp',
+			'binancepay-signature'
 		];
+
+		$neededHeaders = [];
+		foreach ($headers as $key => $value) {
+			if (in_array(strtolower($key), $allowedHeaders)) {
+				$neededHeaders[strtolower($key)] = $value;
+			}
+		}
+
+		// Todo check if all keys present.
+		if (count($neededHeaders) !== count($allowedHeaders)) {
+			Logger::debug('Required headers missing, headers: ' . print_r($neededHeaders, true));
+			return false;
+		}
+
+		// Compare stored certificate serial with the one sent in the header.
+		$certSerial = $this->get_option('certserial');
+		if ($certSerial !== $neededHeaders['binancepay-signature-sn']) {
+			Logger::debug('Error, the certificate serial in the header does not match the locally stored one:');
+			Logger::debug('local serial: ' . $certSerial);
+			Logger::debug('binancepay-signature-sn: ' . $neededHeaders['binancepay-signature-sn']);
+			Logger::debug('Likely Binance issued a new certificate in the meantime. Please go to payment gateway config of BinancePay and hit save agian, it will download the certificate.');
+			return false;
+		}
+
+		$payload = $neededHeaders['binancepay-timestamp'] . "\n" . $neededHeaders['binancepay-nonce'] . "\n" . $requestData . "\n";
+		$decodedSignature = base64_decode($neededHeaders['binancepay-signature']);
+		$publicKey = $this->get_option('certpublic');
+
+		$result = openssl_verify($payload, $decodedSignature, $publicKey, OPENSSL_ALGO_SHA256 );
+
+		if ($result === 1) {
+			Logger::debug('This is a valid webhook request.');
+			return true;
+		}
+
+		Logger::debug('Error validating webhook request.');
+		return false;
 	}
 }

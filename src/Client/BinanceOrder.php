@@ -27,7 +27,7 @@ class BinanceOrder extends AbstractClient
 		$data = [
 			'env' => ['terminalType' => 'WEB'],
 			'orderAmount' => $stableCoinAmount->__toString(),
-			'merchantTradeNo' => 'test' . $orderId . mt_rand(1,9999),
+			'merchantTradeNo' => 'test' . $orderId . mt_rand(1,9999), // todo remove testdata prefix and random number
 			'currency' => $stableCoin,
 			'goods' => [ // todo fix that?
 				'goodsType' => '01',
@@ -81,7 +81,6 @@ class BinanceOrder extends AbstractClient
 	    }
 
 		$jsonData = json_encode($data, JSON_THROW_ON_ERROR);
-
 	    $this->signTransaction($jsonData);
 
 	    $headers['Binancepay-Signature'] = $this->getSignature();
