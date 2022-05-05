@@ -380,7 +380,7 @@ class BinancePayGateway extends \WC_Payment_Gateway {
 		// Note: getallheaders() CamelCases all headers for PHP-FPM/Nginx but for others maybe not, so "BinancePay-Signature"
 		// may becomes "Binancepay-Signature".
 		$allowedHeaders = [
-			'binancepay-signature-sn',
+			'binancepay-certificate-sn',
 			'binancepay-nonce',
 			'binancepay-timestamp',
 			'binancepay-signature'
