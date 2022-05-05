@@ -268,12 +268,12 @@ class BinancePayGateway extends \WC_Payment_Gateway {
 			case 'PAY_SUCCESS':
 				// Update some Binance order meta data.
 				$paymentData = json_decode($webhookData->data, true);
-				$order->add_meta_data('BinancePay_trx_totalFee', $paymentData['totalFee']);
-				$order->add_meta_data('BinancePay_trx_commission', $paymentData['commission']);
-				$order->add_meta_data('BinancePay_trx_openUserId', $paymentData['openUserId']);
-				$order->add_meta_data('BinancePay_trx_transactionId', $paymentData['transactionId']);
-				$order->add_meta_data('BinancePay_trx_transactTime', $paymentData['transactTime']);
-				$order->add_meta_data('BinancePay_trx_paymentInfo', json_encode($paymentData['paymentInfo']));
+				$order->update_meta_data('BinancePay_trx_totalFee', $paymentData['totalFee']);
+				$order->update_meta_data('BinancePay_trx_commission', $paymentData['commission']);
+				$order->update_meta_data('BinancePay_trx_openUserId', $paymentData['openUserId']);
+				$order->update_meta_data('BinancePay_trx_transactionId', $paymentData['transactionId']);
+				$order->update_meta_data('BinancePay_trx_transactTime', $paymentData['transactTime']);
+				$order->update_meta_data('BinancePay_trx_paymentInfo', json_encode($paymentData['paymentInfo']));
 				$order->save();
 
 				$order->payment_complete();
