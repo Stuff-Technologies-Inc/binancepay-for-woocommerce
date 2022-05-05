@@ -27,7 +27,7 @@ class BinanceOrder extends AbstractClient
 		$data = [
 			'env' => ['terminalType' => 'WEB'],
 			'orderAmount' => $stableCoinAmount->__toString(),
-			'merchantTradeNo' => 'test' . $orderId . mt_rand(1,9999), // todo remove testdata prefix and random number
+			'merchantTradeNo' => 'wc' . $orderId . 'r' . mt_rand(1,9999), // todo: reuse existing payment request
 			'currency' => $stableCoin,
 			'goods' => [ // todo fix that?
 				'goodsType' => '01',
