@@ -92,7 +92,13 @@ class BinancePayGateway extends \WC_Payment_Gateway {
 				'description' => __( 'Message to explain how the customer will be paying for the purchase.', 'binancepay-for-woocommerce' ),
 				'default'     => $this->description,
 				'desc_tip'    => true,
-			]
+			],
+			'debug' => [
+				'title'       => __( 'Enable debug log', 'binancepay-for-woocommerce' ),
+				'type'        => 'checkbox',
+				'description' => sprintf( __( 'Stored in WooCommerce -> Status -> Logs: <a href="%s" class="button">View Logs</a>', 'binancepay-for-woocommerce' ), Logger::getLogFileUrl()),
+				'default'     => 'no',
+			],
 		];
 	}
 
