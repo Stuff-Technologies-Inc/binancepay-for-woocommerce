@@ -6,7 +6,7 @@ Adds [Binance Pay](https://pay.binance.com/en) support for WooCommerce.
 
 ## Development
 ```
-git clone git@github.com:ndeet/binancepay-for-woocommerce.git
+git clone git@github.com:Stuff-Technologies-Inc/binancepay-for-woocommerce.git
 ```
 
 ### Local development with Docker
