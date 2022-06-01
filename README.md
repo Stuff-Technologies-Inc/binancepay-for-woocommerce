@@ -2,7 +2,7 @@
 
 Adds [Binance Pay](https://pay.binance.com/en) support for WooCommerce.
 
-## WARNING: Plugin work in progress, and only operating in sandbox mode for now
+User documentation can be found on the offical wordpress plugin page as sonn as it is listed there.
 
 ## Development
 ```
