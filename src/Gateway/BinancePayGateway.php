@@ -206,7 +206,6 @@ class BinancePayGateway extends \WC_Payment_Gateway {
 
 		Logger::debug('Webhook endpoint called.');
 
-		// todo binancepay: this is currently not needed
 		if ($rawPostData = file_get_contents("php://input")) {
 
 			Logger::debug('Webhook data received: ' . print_r($rawPostData, true));
@@ -231,7 +230,7 @@ class BinancePayGateway extends \WC_Payment_Gateway {
 				// Load the order by metadata field BinancePay_id
 				$orders = wc_get_orders([
 					'meta_key' => 'BinancePay_prepayId',
-					'meta_value' => $postData->bizId
+					'meta_value' => wc_clean(wp_unslash($postData->bizId))
 				]);
 
 				// Abort if no orders found.

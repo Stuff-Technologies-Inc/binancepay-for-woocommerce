@@ -2,14 +2,14 @@
 /**
  * Plugin Name:     BinancePay for WooCommerce
  * Plugin URI:      https://wordpress.org/plugins/binancepay-for-woocommerce/
- * Description:
- * Author:          Coincards
+ * Description:     Adds a BinancePay payment gateway for WooCommerce so users can pay with their preferred cryptocurrency.
+ * Author:          ndeet, Coincards
  * Author URI:      https://coincards.com
  * Text Domain:     binancepay-for-woocommerce
  * Domain Path:     /languages
  * Version:         0.1.0
  * Requires PHP:    7.4
- * Tested up to:    5.9
+ * Tested up to:    6.0
  * Requires at least: 5.2
  */
 
