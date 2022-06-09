@@ -1,11 +1,11 @@
-# Copyright (C) 2022 Coincards
+# Copyright (C) 2022 ndeet, Coincards
 # This file is distributed under the same license as the BinancePay for WooCommerce package.
 msgid ""
 msgstr ""
 "Project-Id-Version: BinancePay for WooCommerce 0.1.0\n"
 "Report-Msgid-Bugs-To: "
 "https://wordpress.org/support/plugin/binancepay-for-woocommerce\n"
-"POT-Creation-Date: 2022-05-30 21:17:13+00:00\n"
+"POT-Creation-Date: 2022-06-09 07:29:34+00:00\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -117,8 +117,14 @@ msgstr ""
 msgid "https://wordpress.org/plugins/binancepay-for-woocommerce/"
 msgstr ""
 
+#. Description of the plugin/theme
+msgid ""
+"Adds a BinancePay payment gateway for WooCommerce so users can pay with "
+"their preferred cryptocurrency."
+msgstr ""
+
 #. Author of the plugin/theme
-msgid "Coincards"
+msgid "ndeet, Coincards"
 msgstr ""
 
 #. Author URI of the plugin/theme
