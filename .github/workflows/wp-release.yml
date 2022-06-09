@@ -1,6 +1,5 @@
 #name: Build and deploy to WordPress.org
 on:
-  push:
   release:
     types: [published]
 jobs:
