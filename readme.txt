@@ -20,6 +20,8 @@ Customers can pay from ANY funding wallet, in any cryptocurrency from their Bina
 
 Webhooks are enabled, so as soon as a payment is received, your store will set the order to processing. Full Meta data from each transaction is imported into your orders meta fields for easy reporting.
 
+*This plugin is a community project, and not officially supported, affiliated, or endoresed by Binance*
+
 == Installation ==
 
 This plugin requires WooCommerce and PHP 7.4 or newer. Please make sure you meet those requirements..
